@@ -76,7 +76,36 @@ pwdl() {
 }
 
 # ══════════════════════════════════════════════════════════════════════
-# 5. 其他配置
+# 5. 现代工具初始化
+# ══════════════════════════════════════════════════════════════════════
+
+# zoxide (智能 cd)
+if command -v zoxide &> /dev/null; then
+    eval "$(zoxide init --cmd cd zsh)"
+fi
+
+# starship prompt
+if command -v starship &> /dev/null; then
+    eval "$(starship init zsh)"
+fi
+
+# atuin (shell 历史管理)
+if command -v atuin &> /dev/null; then
+    eval "$(atuin init zsh)"
+fi
+
+# fzf 快捷键
+if command -v fzf &> /dev/null; then
+    source <(fzf --zsh) 2>/dev/null || true
+fi
+
+# delta 作为 git pager
+if command -v delta &> /dev/null; then
+    export GIT_PAGER="delta"
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# 6. 其他配置
 # ══════════════════════════════════════════════════════════════════════
 
 # 禁用 Node.js 废弃警告

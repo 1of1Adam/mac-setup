@@ -96,11 +96,22 @@ install_tools() {
         python
         gh          # GitHub CLI
         jq
-        ripgrep
-        fzf
+        ripgrep     # 替代 grep
+        fzf         # 模糊搜索
         eza         # 替代 ls
         bat         # 替代 cat
         fd          # 替代 find
+        zoxide      # 替代 cd，智能目录跳转
+        atuin       # shell 历史管理
+        starship    # 终端 prompt 美化
+        delta       # git diff 美化
+        lazygit     # git TUI
+        htop        # 替代 top
+        dust        # 替代 du
+        duf         # 替代 df
+        procs       # 替代 ps
+        httpie      # 替代 curl (更友好)
+        tldr        # 替代 man (简化版)
     )
 
     for tool in "${TOOLS[@]}"; do
