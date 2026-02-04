@@ -136,15 +136,41 @@ setup_git() {
 }
 
 # ============================================
-# 6. 安装 Claude Code CLI
+# 6. 安装 Google Chrome
+# ============================================
+install_chrome() {
+    if [[ -d "/Applications/Google Chrome.app" ]]; then
+        log_info "Google Chrome 已安装，跳过"
+    else
+        log_info "安装 Google Chrome..."
+        brew install --cask google-chrome
+        log_info "Google Chrome 安装完成 ✓"
+    fi
+}
+
+# ============================================
+# 7. 安装 Claude Code CLI
 # ============================================
 install_claude_code() {
     if command -v claude &> /dev/null; then
         log_info "Claude Code 已安装，跳过"
     else
         log_info "安装 Claude Code CLI..."
-        npm install -g @anthropic-ai/claude-code
+        curl -fsSL https://claude.ai/install.sh | bash
         log_info "Claude Code 安装完成 ✓"
+    fi
+}
+
+# ============================================
+# 8. 安装 OpenAI Codex CLI
+# ============================================
+install_codex() {
+    if command -v codex &> /dev/null; then
+        log_info "OpenAI Codex 已安装，跳过"
+    else
+        log_info "安装 OpenAI Codex CLI..."
+        npm i -g @openai/codex
+        log_info "OpenAI Codex 安装完成 ✓"
     fi
 }
 
@@ -161,8 +187,10 @@ main() {
     # 开发环境
     install_homebrew
     install_tools
+    install_chrome
     setup_git
     install_claude_code
+    install_codex
 
     echo ""
     echo "=========================================="
@@ -172,8 +200,10 @@ main() {
     echo "已配置:"
     echo "  - sudo 免密码"
     echo "  - Homebrew + 常用工具"
+    echo "  - Google Chrome"
     echo "  - Git"
     echo "  - Claude Code CLI"
+    echo "  - OpenAI Codex CLI"
     echo ""
 }
 

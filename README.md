@@ -17,8 +17,10 @@ curl -fsSL https://raw.githubusercontent.com/peng-xiao-shuai/mac-setup/main/setu
 | 移除登录密码 | 可选，将登录密码设为空 |
 | Homebrew | macOS 包管理器 |
 | 常用工具 | git, node, pnpm, python, gh, jq, ripgrep, fzf, eza, bat, fd |
+| Google Chrome | `brew install --cask google-chrome` |
 | Git 配置 | 用户名、邮箱、默认分支 main |
-| Claude Code | Anthropic CLI 工具 |
+| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` |
+| OpenAI Codex | `npm i -g @openai/codex` |
 
 ## 单独配置 sudo 免密码
 
