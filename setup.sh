@@ -1,332 +1,292 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# setup.sh — macOS 新电脑一键配置
 #
-# macOS 新电脑一键配置脚本
-# 使用方法: curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/setup.sh | bash
+# 使用方法:
+#   curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/setup.sh | bash
 #
+# 或者克隆后运行:
+#   git clone https://github.com/1of1Adam/dotfiles.git ~/.dotfiles
+#   cd ~/.dotfiles && ./setup.sh
 
 set -e
 
-# 颜色输出
+# 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_info() { echo -e "${GREEN}✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+log_error() { echo -e "${RED}✗${NC} $1"; }
+log_section() { echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n${BLUE}▶ $1${NC}\n"; }
 
 CURRENT_USER=$(whoami)
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
 
 echo ""
-echo "=========================================="
-echo "   macOS 新电脑一键配置脚本"
-echo "   用户: $CURRENT_USER"
-echo "=========================================="
-echo ""
+echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}         ${GREEN}macOS 新电脑一键配置脚本${NC}                    ${CYAN}║${NC}"
+echo -e "${CYAN}║${NC}         用户: ${YELLOW}$CURRENT_USER${NC}                               ${CYAN}║${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
 
-# ============================================
-# 1. 配置 sudo 免密码
-# ============================================
-setup_sudo_nopasswd() {
-    log_info "配置 sudo 免密码..."
+###############################################################################
+# 克隆或更新 dotfiles                                                          #
+###############################################################################
 
-    SUDOERS_FILE="/etc/sudoers.d/$CURRENT_USER"
-    SUDOERS_CONTENT="$CURRENT_USER ALL=(ALL) NOPASSWD: ALL"
+log_section "准备 Dotfiles"
 
-    if [[ -f "$SUDOERS_FILE" ]]; then
-        log_warn "sudoers 文件已存在，跳过"
+if [[ -d "$DOTFILES_DIR/.git" ]]; then
+    log_info "更新 dotfiles..."
+    git -C "$DOTFILES_DIR" pull origin main 2>/dev/null || true
+else
+    log_info "克隆 dotfiles 到 $DOTFILES_DIR..."
+    rm -rf "$DOTFILES_DIR"
+    git clone https://github.com/1of1Adam/dotfiles.git "$DOTFILES_DIR"
+fi
+
+cd "$DOTFILES_DIR"
+
+###############################################################################
+# 1. sudo 免密码                                                              #
+###############################################################################
+
+log_section "配置 sudo 免密码"
+
+SUDOERS_FILE="/etc/sudoers.d/$CURRENT_USER"
+
+if [[ -f "$SUDOERS_FILE" ]]; then
+    log_warn "sudoers 文件已存在，跳过"
+else
+    echo "$CURRENT_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
+    log_info "sudo 免密码配置完成"
+fi
+
+###############################################################################
+# 2. 可选：移除登录密码                                                        #
+###############################################################################
+
+log_section "登录密码设置"
+
+read -p "是否移除登录密码？(y/N): " confirm </dev/tty || confirm="n"
+if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    read -s -p "请输入当前密码: " current_password </dev/tty
+    echo ""
+    if dscl . -authonly "$CURRENT_USER" "$current_password" 2>/dev/null; then
+        dscl . -passwd "/Users/$CURRENT_USER" "$current_password" ""
+        log_info "登录密码已移除"
     else
-        echo "$SUDOERS_CONTENT" | sudo tee "$SUDOERS_FILE" > /dev/null
-        sudo chmod 440 "$SUDOERS_FILE"
-        log_info "sudo 免密码配置完成 ✓"
+        log_error "密码验证失败"
     fi
-}
+else
+    log_info "跳过移除登录密码"
+fi
 
-# ============================================
-# 2. 移除登录密码（可选）
-# ============================================
-remove_login_password() {
-    read -p "是否移除登录密码？(y/N): " confirm < /dev/tty
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        read -s -p "请输入当前密码: " current_password < /dev/tty
-        echo ""
+###############################################################################
+# 3. Homebrew 和工具                                                          #
+###############################################################################
 
-        if dscl . -authonly "$CURRENT_USER" "$current_password" 2>/dev/null; then
-            dscl . -passwd "/Users/$CURRENT_USER" "$current_password" ""
-            log_info "登录密码已移除 ✓"
-        else
-            log_error "密码验证失败"
-            return 1
-        fi
-    else
-        log_info "跳过移除登录密码"
-    fi
-}
+log_section "安装 Homebrew 和工具"
 
-# ============================================
-# 3. 安装 Homebrew
-# ============================================
-install_homebrew() {
-    if command -v brew &> /dev/null; then
-        log_info "Homebrew 已安装，跳过"
-    else
-        log_info "安装 Homebrew..."
+if [[ -f "$DOTFILES_DIR/brew.sh" ]]; then
+    chmod +x "$DOTFILES_DIR/brew.sh"
+    "$DOTFILES_DIR/brew.sh"
+else
+    # Fallback: 直接安装
+    if ! command -v brew &>/dev/null; then
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-        # 添加到 PATH (Apple Silicon)
         if [[ -f /opt/homebrew/bin/brew ]]; then
-            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
-        log_info "Homebrew 安装完成 ✓"
     fi
-}
+fi
 
-# ============================================
-# 4. 安装常用工具
-# ============================================
-install_tools() {
-    log_info "安装常用开发工具..."
+###############################################################################
+# 4. Git 配置                                                                 #
+###############################################################################
 
-    TOOLS=(
-        git
-        node
-        pnpm
-        python
-        gh          # GitHub CLI
-        jq
-        ripgrep     # 替代 grep
-        fzf         # 模糊搜索
-        eza         # 替代 ls
-        bat         # 替代 cat
-        fd          # 替代 find
-        zoxide      # 替代 cd，智能目录跳转
-        atuin       # shell 历史管理
-        starship    # 终端 prompt 美化
-        delta       # git diff 美化
-        lazygit     # git TUI
-        htop        # 替代 top
-        dust        # 替代 du
-        duf         # 替代 df
-        procs       # 替代 ps
-        httpie      # 替代 curl (更友好)
-        tldr        # 替代 man (简化版)
-    )
+log_section "配置 Git"
 
-    for tool in "${TOOLS[@]}"; do
-        if brew list "$tool" &>/dev/null; then
-            log_info "$tool 已安装"
-        else
-            log_info "安装 $tool..."
-            brew install "$tool"
-        fi
-    done
+read -p "Git 用户名 (回车跳过): " git_name </dev/tty || git_name=""
+read -p "Git 邮箱 (回车跳过): " git_email </dev/tty || git_email=""
 
-    log_info "常用工具安装完成 ✓"
-}
+[[ -n "$git_name" ]] && git config --global user.name "$git_name"
+[[ -n "$git_email" ]] && git config --global user.email "$git_email"
 
-# ============================================
-# 5. 配置 Git
-# ============================================
-setup_git() {
-    log_info "配置 Git..."
+# Git 配置
+git config --global init.defaultBranch main
+git config --global pull.rebase false
+git config --global core.editor "code --wait"
 
-    read -p "Git 用户名 (回车跳过): " git_name < /dev/tty
-    read -p "Git 邮箱 (回车跳过): " git_email < /dev/tty
+# Delta 美化配置 (如果安装了 delta)
+if command -v delta &>/dev/null; then
+    git config --global core.pager delta
+    git config --global interactive.diffFilter "delta --color-only"
+    git config --global delta.navigate true
+    git config --global delta.light false
+    git config --global delta.side-by-side true
+    git config --global merge.conflictstyle diff3
+    git config --global diff.colorMoved default
+fi
 
-    [[ -n "$git_name" ]] && git config --global user.name "$git_name"
-    [[ -n "$git_email" ]] && git config --global user.email "$git_email"
+log_info "Git 配置完成"
 
-    # 常用配置
-    git config --global init.defaultBranch main
-    git config --global pull.rebase false
-    git config --global core.editor "code --wait"
+###############################################################################
+# 5. AI 工具                                                                  #
+###############################################################################
 
-    log_info "Git 配置完成 ✓"
-}
+log_section "安装 AI 工具"
 
-# ============================================
-# 6. 安装 Google Chrome
-# ============================================
-install_chrome() {
-    if [[ -d "/Applications/Google Chrome.app" ]]; then
-        log_info "Google Chrome 已安装，跳过"
-    else
-        log_info "安装 Google Chrome..."
-        brew install --cask google-chrome
-        log_info "Google Chrome 安装完成 ✓"
-    fi
-}
+# Claude Code
+if command -v claude &>/dev/null; then
+    log_info "Claude Code 已安装"
+else
+    log_info "安装 Claude Code CLI..."
+    curl -fsSL https://claude.ai/install.sh | bash 2>/dev/null || log_warn "Claude Code 安装失败"
+fi
 
-# ============================================
-# 7. 安装 Claude Code CLI
-# ============================================
-install_claude_code() {
-    if command -v claude &> /dev/null; then
-        log_info "Claude Code 已安装，跳过"
-    else
-        log_info "安装 Claude Code CLI..."
-        curl -fsSL https://claude.ai/install.sh | bash
-        log_info "Claude Code 安装完成 ✓"
-    fi
-}
+# OpenAI Codex
+if command -v codex &>/dev/null; then
+    log_info "OpenAI Codex 已安装"
+elif command -v npm &>/dev/null; then
+    log_info "安装 OpenAI Codex CLI..."
+    npm i -g @openai/codex 2>/dev/null || log_warn "Codex 安装失败"
+fi
 
-# ============================================
-# 8. 安装 OpenAI Codex CLI
-# ============================================
-install_codex() {
-    if command -v codex &> /dev/null; then
-        log_info "OpenAI Codex 已安装，跳过"
-    else
-        log_info "安装 OpenAI Codex CLI..."
-        npm i -g @openai/codex
-        log_info "OpenAI Codex 安装完成 ✓"
-    fi
-}
+###############################################################################
+# 6. 链接配置文件                                                              #
+###############################################################################
 
-# ============================================
-# 9. 安装 VS Code
-# ============================================
-install_vscode() {
-    if [[ -d "/Applications/Visual Studio Code.app" ]]; then
-        log_info "VS Code 已安装，跳过"
-    else
-        log_info "安装 VS Code..."
-        brew install --cask visual-studio-code
-        log_info "VS Code 安装完成 ✓"
-    fi
-}
+log_section "链接配置文件"
 
-# ============================================
-# 10. 安装 Raycast
-# ============================================
-install_raycast() {
-    if [[ -d "/Applications/Raycast.app" ]]; then
-        log_info "Raycast 已安装，跳过"
-    else
-        log_info "安装 Raycast..."
-        brew install --cask raycast
-        log_info "Raycast 安装完成 ✓"
-    fi
-}
+link_file() {
+    local src="$1"
+    local dst="$2"
 
-# ============================================
-# 11. macOS 系统优化
-# ============================================
-setup_macos_defaults() {
-    log_info "配置 macOS 系统优化..."
-
-    # 加快键盘重复速度
-    defaults write NSGlobalDomain KeyRepeat -int 1
-    defaults write NSGlobalDomain InitialKeyRepeat -int 10
-
-    # 显示隐藏文件
-    defaults write com.apple.finder AppleShowAllFiles YES
-
-    # 禁止在网络卷上生成 .DS_Store
-    defaults write com.apple.desktopservices DSDontWriteNetworkStores true
-
-    log_info "macOS 系统优化完成 ✓ (部分设置需要重启生效)"
-}
-
-# ============================================
-# 12. 配置 .zshrc
-# ============================================
-setup_zshrc() {
-    log_info "配置 .zshrc..."
-
-    # 备份现有 .zshrc
-    if [[ -f ~/.zshrc ]]; then
-        cp ~/.zshrc ~/.zshrc.backup.$(date +%Y%m%d%H%M%S)
-        log_info "已备份现有 .zshrc"
+    if [[ ! -f "$src" ]]; then
+        return
     fi
 
-    # 下载 .zshrc 模板
-    curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/zshrc -o ~/.zshrc
-
-    log_info ".zshrc 配置完成 ✓"
-}
-
-# ============================================
-# 13. 安装 Rime 鼠须管输入法
-# ============================================
-install_rime() {
-    if [[ -d "/Library/Input Methods/Squirrel.app" ]]; then
-        log_info "Rime 鼠须管已安装"
-    else
-        log_info "安装 Rime 鼠须管..."
-        brew install --cask squirrel
-        log_info "Rime 鼠须管安装完成 ✓"
+    if [[ -f "$dst" ]] && [[ ! -L "$dst" ]]; then
+        log_warn "备份 $dst"
+        mv "$dst" "$dst.backup.$(date +%Y%m%d%H%M%S)"
     fi
 
-    # 恢复 Rime 配置
+    ln -sf "$src" "$dst"
+    log_info "链接 $(basename "$src") -> $dst"
+}
+
+# 链接 dotfiles
+link_file "$DOTFILES_DIR/.aliases" "$HOME/.aliases"
+link_file "$DOTFILES_DIR/.functions" "$HOME/.functions"
+
+# 创建 zshrc 如果不存在
+if [[ -f "$DOTFILES_DIR/zshrc" ]]; then
+    link_file "$DOTFILES_DIR/zshrc" "$HOME/.zshrc"
+elif [[ ! -f "$HOME/.zshrc" ]]; then
+    # 创建基础 .zshrc
+    cat >"$HOME/.zshrc" <<'EOF'
+# ~/.zshrc
+
+# 加载 dotfiles
+[[ -f ~/.aliases ]] && source ~/.aliases
+[[ -f ~/.functions ]] && source ~/.functions
+
+# Homebrew
+if [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+# 现代 CLI 工具
+command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
+command -v starship &>/dev/null && eval "$(starship init zsh)"
+command -v atuin &>/dev/null && eval "$(atuin init zsh)"
+
+# fzf
+[[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh
+
+# 历史记录
+HISTSIZE=50000
+SAVEHIST=50000
+HISTFILE=~/.zsh_history
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+
+# 补全
+autoload -Uz compinit && compinit
+
+# 快捷键
+bindkey -e
+bindkey '^[[A' history-search-backward
+bindkey '^[[B' history-search-forward
+EOF
+    log_info "创建 ~/.zshrc"
+fi
+
+###############################################################################
+# 7. macOS 系统设置                                                           #
+###############################################################################
+
+log_section "应用 macOS 系统设置"
+
+if [[ -f "$DOTFILES_DIR/.macos" ]]; then
+    chmod +x "$DOTFILES_DIR/.macos"
+    "$DOTFILES_DIR/.macos"
+else
+    log_warn "未找到 .macos 文件，跳过"
+fi
+
+###############################################################################
+# 8. Rime 输入法                                                              #
+###############################################################################
+
+log_section "配置 Rime 输入法"
+
+if [[ ! -d "/Library/Input Methods/Squirrel.app" ]]; then
+    log_info "安装 Rime 鼠须管..."
+    brew install --cask squirrel 2>/dev/null || log_warn "Rime 安装失败"
+else
+    log_info "Rime 鼠须管已安装"
+fi
+
+# 恢复 Rime 配置
+if [[ -d "$DOTFILES_DIR/rime" ]]; then
     log_info "恢复 Rime 配置..."
     mkdir -p ~/Library/Rime
+    cp -r "$DOTFILES_DIR/rime/"* ~/Library/Rime/ 2>/dev/null || true
+    log_info "Rime 配置恢复完成"
+    log_warn "请手动重新部署 Rime: 右键点击输入法图标 → 重新部署"
+fi
 
-    # 下载配置（排除 build 和 userdb）
-    RIME_URL="https://raw.githubusercontent.com/1of1Adam/dotfiles/main/rime"
+###############################################################################
+# 完成                                                                        #
+###############################################################################
 
-    # 使用 git sparse checkout 下载 rime 目录
-    cd /tmp
-    rm -rf dotfiles-rime 2>/dev/null
-    git clone --depth 1 --filter=blob:none --sparse https://github.com/1of1Adam/dotfiles.git dotfiles-rime
-    cd dotfiles-rime
-    git sparse-checkout set rime
-    cp -r rime/* ~/Library/Rime/
-    rm -rf /tmp/dotfiles-rime
-
-    log_info "Rime 配置恢复完成 ✓ (请重新部署: 右键点击输入法图标 → 重新部署)"
-}
-
-# ============================================
-# 主流程
-# ============================================
-main() {
-    # sudo 免密码必须首先配置
-    setup_sudo_nopasswd
-
-    # 可选配置
-    remove_login_password
-
-    # 开发环境
-    install_homebrew
-    install_tools
-    install_chrome
-    install_vscode
-    install_raycast
-    setup_git
-    install_claude_code
-    install_codex
-
-    # 系统配置
-    setup_macos_defaults
-    setup_zshrc
-    install_rime
-
-    echo ""
-    echo "=========================================="
-    echo "   配置完成！"
-    echo "=========================================="
-    echo ""
-    echo "已配置:"
-    echo "  - sudo 免密码"
-    echo "  - Homebrew + 常用工具"
-    echo "  - Google Chrome"
-    echo "  - VS Code"
-    echo "  - Raycast"
-    echo "  - Git"
-    echo "  - Claude Code CLI"
-    echo "  - OpenAI Codex CLI"
-    echo "  - macOS 系统优化 (键盘速度等)"
-    echo "  - .zshrc 配置"
-    echo "  - Rime 鼠须管输入法 + 配置"
-    echo ""
-    echo "提示:"
-    echo "  - 部分设置需要重启或重新登录生效"
-    echo "  - Rime 输入法需要手动重新部署"
-    echo ""
-}
-
-# 运行
-main "$@"
+echo ""
+echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}              ${GREEN}🎉 配置完成！${NC}                          ${CYAN}║${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${GREEN}已配置:${NC}"
+echo "  ✅ sudo 免密码"
+echo "  ✅ Homebrew + 现代 CLI 工具 (eza, bat, fd, rg, fzf...)"
+echo "  ✅ GUI 应用 (Chrome, VS Code, Raycast, iTerm2...)"
+echo "  ✅ Nerd 字体"
+echo "  ✅ Git + Delta 美化"
+echo "  ✅ Claude Code + OpenAI Codex"
+echo "  ✅ macOS 系统优化 (100+ 项设置)"
+echo "  ✅ Shell 别名和函数 (.aliases, .functions)"
+echo "  ✅ Rime 鼠须管输入法 + 雾凇拼音"
+echo ""
+echo -e "${YELLOW}💡 提示:${NC}"
+echo "  • 运行 ${CYAN}source ~/.zshrc${NC} 或重启终端加载新配置"
+echo "  • 部分设置需要注销/重启才能完全生效"
+echo "  • Rime 输入法需要手动重新部署"
+echo ""
+echo -e "${BLUE}📁 Dotfiles 位置:${NC} $DOTFILES_DIR"
+echo ""

@@ -1,0 +1,400 @@
+#!/usr/bin/env bash
+
+# ~/.functions — Shell 函数
+# 基于 https://github.com/mathiasbynens/dotfiles
+
+###############################################################################
+# 目录操作                                                                     #
+###############################################################################
+
+# 创建目录并进入
+mkd() {
+    mkdir -p "$@" && cd "$_"
+}
+
+# 切换到 Finder 当前目录
+cdf() {
+    cd "$(osascript -e 'tell app "Finder" to POSIX path of (insertion location as alias)')"
+}
+
+# 在 Finder 中打开当前目录
+o() {
+    if [ $# -eq 0 ]; then
+        open .
+    else
+        open "$@"
+    fi
+}
+
+###############################################################################
+# 文件操作                                                                     #
+###############################################################################
+
+# 创建 .tar.gz 压缩包
+targz() {
+    local tmpFile="${1%/}.tar"
+    tar -cvf "${tmpFile}" --exclude=".DS_Store" "${1}" || return 1
+
+    size=$(
+        stat -f"%z" "${tmpFile}" 2>/dev/null
+        stat -c"%s" "${tmpFile}" 2>/dev/null
+    )
+
+    local cmd=""
+    if ((size < 52428800)) && hash zopfli 2>/dev/null; then
+        cmd="zopfli"
+    else
+        if hash pigz 2>/dev/null; then
+            cmd="pigz"
+        else
+            cmd="gzip"
+        fi
+    fi
+
+    echo "使用 \`${cmd}\` 压缩..."
+    "${cmd}" -v "${tmpFile}" || return 1
+    [ -f "${tmpFile}" ] && rm "${tmpFile}"
+
+    zippedSize=$(
+        stat -f"%z" "${tmpFile}.gz" 2>/dev/null
+        stat -c"%s" "${tmpFile}.gz" 2>/dev/null
+    )
+
+    echo "${tmpFile}.gz ($((zippedSize / 1000)) kB) 创建成功"
+}
+
+# 获取文件大小
+fs() {
+    if du -b /dev/null >/dev/null 2>&1; then
+        local arg=-sbh
+    else
+        local arg=-sh
+    fi
+    if [[ -n "$@" ]]; then
+        du $arg -- "$@"
+    else
+        du $arg .[^.]* ./*
+    fi
+}
+
+# 对比文件差异（使用 diff-so-fancy 或 colordiff）
+diff() {
+    if command -v diff-so-fancy &>/dev/null; then
+        command diff -u "$@" | diff-so-fancy
+    elif command -v colordiff &>/dev/null; then
+        colordiff "$@"
+    else
+        command diff "$@"
+    fi
+}
+
+###############################################################################
+# 文本处理                                                                     #
+###############################################################################
+
+# 提取压缩文件（通用）
+extract() {
+    if [ -f "$1" ]; then
+        case "$1" in
+        *.tar.bz2) tar xjf "$1" ;;
+        *.tar.gz) tar xzf "$1" ;;
+        *.tar.xz) tar xJf "$1" ;;
+        *.bz2) bunzip2 "$1" ;;
+        *.rar) unrar x "$1" ;;
+        *.gz) gunzip "$1" ;;
+        *.tar) tar xf "$1" ;;
+        *.tbz2) tar xjf "$1" ;;
+        *.tgz) tar xzf "$1" ;;
+        *.zip) unzip "$1" ;;
+        *.Z) uncompress "$1" ;;
+        *.7z) 7z x "$1" ;;
+        *) echo "'$1' 无法通过 extract() 解压" ;;
+        esac
+    else
+        echo "'$1' 不是有效的文件"
+    fi
+}
+
+# 语法高亮显示代码（需要 pygments）
+highlight() {
+    if command -v pygmentize &>/dev/null; then
+        local style="${2:-monokai}"
+        pygmentize -O style="${style}" -f terminal256 -g "$1"
+    elif command -v bat &>/dev/null; then
+        bat "$1"
+    else
+        cat "$1"
+    fi
+}
+
+# JSON 格式化（使用 jq）
+json() {
+    if [ -t 0 ]; then
+        # 参数形式
+        if command -v jq &>/dev/null; then
+            echo "$*" | jq .
+        else
+            python3 -m json.tool <<<"$*"
+        fi
+    else
+        # 管道形式
+        if command -v jq &>/dev/null; then
+            jq .
+        else
+            python3 -m json.tool
+        fi
+    fi
+}
+
+###############################################################################
+# 网络                                                                        #
+###############################################################################
+
+# 创建数据 URL
+dataurl() {
+    local mimeType
+    mimeType=$(file -b --mime-type "$1")
+    if [[ $mimeType == text/* ]]; then
+        mimeType="${mimeType};charset=utf-8"
+    fi
+    echo "data:${mimeType};base64,$(openssl base64 -in "$1" | tr -d '\n')"
+}
+
+# 获取网站 HTTP headers
+headers() {
+    curl -sI "$1" | sed '/^\s*$/q'
+}
+
+# 快速 HTTP GET
+get() {
+    curl -sS "$@"
+}
+
+# 下载并显示进度
+download() {
+    local url="$1"
+    local filename="${2:-$(basename "$url")}"
+    curl -L -# -o "$filename" "$url"
+}
+
+# 测试网站响应时间
+timing() {
+    curl -o /dev/null -s -w "DNS: %{time_namelookup}s\nConnect: %{time_connect}s\nTLS: %{time_appconnect}s\nStart: %{time_starttransfer}s\nTotal: %{time_total}s\n" "$1"
+}
+
+# 查询 DNS 记录
+digall() {
+    dig +nocmd "$1" any +multiline +noall +answer
+}
+
+# 端口扫描
+portscan() {
+    local host="${1:-localhost}"
+    local ports="${2:-1-1024}"
+    echo "扫描 $host 端口 $ports..."
+    nmap -p "$ports" "$host"
+}
+
+# 检查端口是否被占用
+port() {
+    lsof -i :"$1"
+}
+
+# 杀死占用某端口的进程
+killport() {
+    lsof -i :"$1" | awk 'NR!=1 {print $2}' | xargs kill -9 2>/dev/null
+    echo "已杀死占用端口 $1 的进程"
+}
+
+###############################################################################
+# 开发                                                                        #
+###############################################################################
+
+# 在当前目录启动 HTTP 服务器
+server() {
+    local port="${1:-8000}"
+    echo "启动 HTTP 服务器: http://localhost:${port}"
+    python3 -m http.server "$port"
+}
+
+# Git 提交所有更改
+gitcommit() {
+    git add -A && git commit -m "$1"
+}
+
+# Git 提交并推送
+gitpush() {
+    git add -A && git commit -m "$1" && git push
+}
+
+# 创建 .gitignore
+gi() {
+    curl -sL "https://www.toptal.com/developers/gitignore/api/$*"
+}
+
+# 快速创建 Node.js 项目
+create-node() {
+    local name="${1:-.}"
+    mkdir -p "$name" && cd "$name"
+    pnpm init
+    echo "node_modules" >.gitignore
+    echo ".env" >>.gitignore
+    git init
+    echo "✅ Node.js 项目已创建: $name"
+}
+
+# 快速创建 Python 项目
+create-python() {
+    local name="${1:-.}"
+    mkdir -p "$name" && cd "$name"
+    python3 -m venv .venv
+    source .venv/bin/activate
+    echo ".venv" >.gitignore
+    echo "__pycache__" >>.gitignore
+    echo "*.pyc" >>.gitignore
+    echo ".env" >>.gitignore
+    git init
+    echo "✅ Python 项目已创建: $name (venv 已激活)"
+}
+
+###############################################################################
+# macOS 特定                                                                  #
+###############################################################################
+
+# 显示 Finder 隐藏文件
+showfiles() {
+    defaults write com.apple.finder AppleShowAllFiles -bool true
+    killall Finder
+}
+
+# 隐藏 Finder 隐藏文件
+hidefiles() {
+    defaults write com.apple.finder AppleShowAllFiles -bool false
+    killall Finder
+}
+
+# 清理 .DS_Store 文件
+cleanup() {
+    find . -type f -name '*.DS_Store' -ls -delete
+}
+
+# 清空 DNS 缓存
+flushdns() {
+    sudo dscacheutil -flushcache
+    sudo killall -HUP mDNSResponder
+    echo "DNS 缓存已清空"
+}
+
+# 重建 Spotlight 索引
+reindex() {
+    sudo mdutil -E /
+    echo "Spotlight 索引重建中..."
+}
+
+# 获取 macOS 版本
+macversion() {
+    sw_vers
+}
+
+# 更新所有软件
+updateall() {
+    echo "🍺 更新 Homebrew..."
+    brew update && brew upgrade && brew cleanup
+
+    echo "📦 更新 npm 全局包..."
+    npm update -g 2>/dev/null
+
+    echo "🐍 更新 pip..."
+    pip3 install --upgrade pip 2>/dev/null
+
+    echo "✅ 全部更新完成!"
+}
+
+###############################################################################
+# 实用工具                                                                     #
+###############################################################################
+
+# 快速备份文件
+backup() {
+    cp "$1" "$1.bak.$(date +%Y%m%d%H%M%S)"
+}
+
+# 计算器
+calc() {
+    echo "$*" | bc -l
+}
+
+# 生成随机字符串
+randstr() {
+    local length="${1:-32}"
+    LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$length"
+    echo
+}
+
+# 生成随机密码
+randpw() {
+    local length="${1:-16}"
+    LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*' </dev/urandom | head -c "$length"
+    echo
+}
+
+# 生成 UUID
+uuid() {
+    uuidgen | tr '[:upper:]' '[:lower:]'
+}
+
+# 倒计时
+countdown() {
+    local seconds="${1:-60}"
+    while [ $seconds -gt 0 ]; do
+        echo -ne "\r⏱️  剩余 $seconds 秒..."
+        sleep 1
+        ((seconds--))
+    done
+    echo -e "\r⏰ 时间到!        "
+    # 播放提示音
+    afplay /System/Library/Sounds/Glass.aiff 2>/dev/null
+}
+
+# 秒表
+stopwatch() {
+    echo "⏱️ 秒表开始，按 Ctrl+C 停止"
+    local start=$(date +%s)
+    while true; do
+        local now=$(date +%s)
+        local elapsed=$((now - start))
+        local hours=$((elapsed / 3600))
+        local minutes=$(((elapsed % 3600) / 60))
+        local seconds=$((elapsed % 60))
+        printf "\r%02d:%02d:%02d" $hours $minutes $seconds
+        sleep 1
+    done
+}
+
+# 天气
+weather() {
+    local city="${1:-Shanghai}"
+    curl -s "wttr.in/${city}?format=3"
+}
+
+# 详细天气
+weatherfull() {
+    local city="${1:-Shanghai}"
+    curl -s "wttr.in/${city}"
+}
+
+# 汇率转换（需要联网）
+currency() {
+    local amount="${1:-1}"
+    local from="${2:-USD}"
+    local to="${3:-CNY}"
+    curl -s "https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}" | jq -r '.result'
+}
+
+# 翻译（使用 Google Translate）
+translate() {
+    local text="$*"
+    local sl="${SL:-auto}"
+    local tl="${TL:-zh-CN}"
+    curl -s "https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${text}'))")" | python3 -c "import sys, json; print(json.load(sys.stdin)[0][0][0])"
+}
