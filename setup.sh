@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # macOS 新电脑一键配置脚本
-# 使用方法: curl -fsSL https://raw.githubusercontent.com/1of1Adam/mac-setup/main/setup.sh | bash
+# 使用方法: curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/setup.sh | bash
 #
 
 set -e
@@ -243,7 +243,7 @@ setup_zshrc() {
     fi
 
     # 下载 .zshrc 模板
-    curl -fsSL https://raw.githubusercontent.com/1of1Adam/mac-setup/main/zshrc -o ~/.zshrc
+    curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/zshrc -o ~/.zshrc
 
     log_info ".zshrc 配置完成 ✓"
 }
@@ -265,16 +265,16 @@ install_rime() {
     mkdir -p ~/Library/Rime
 
     # 下载配置（排除 build 和 userdb）
-    RIME_URL="https://raw.githubusercontent.com/1of1Adam/mac-setup/main/rime"
+    RIME_URL="https://raw.githubusercontent.com/1of1Adam/dotfiles/main/rime"
 
     # 使用 git sparse checkout 下载 rime 目录
     cd /tmp
-    rm -rf mac-setup-rime 2>/dev/null
-    git clone --depth 1 --filter=blob:none --sparse https://github.com/1of1Adam/mac-setup.git mac-setup-rime
-    cd mac-setup-rime
+    rm -rf dotfiles-rime 2>/dev/null
+    git clone --depth 1 --filter=blob:none --sparse https://github.com/1of1Adam/dotfiles.git dotfiles-rime
+    cd dotfiles-rime
     git sparse-checkout set rime
     cp -r rime/* ~/Library/Rime/
-    rm -rf /tmp/mac-setup-rime
+    rm -rf /tmp/dotfiles-rime
 
     log_info "Rime 配置恢复完成 ✓ (请重新部署: 右键点击输入法图标 → 重新部署)"
 }

@@ -6,7 +6,7 @@
 
 ```bash
 # 下载并运行（需要先登录 GitHub）
-curl -fsSL https://raw.githubusercontent.com/1of1Adam/mac-setup/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/1of1Adam/dotfiles/main/setup.sh | bash
 ```
 
 ## 配置内容
