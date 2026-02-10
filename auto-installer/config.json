@@ -1,0 +1,20 @@
+{
+  "downloadsDir": "~/Downloads",
+  "installDir": "/Applications",
+  "fswatchPath": "/opt/homebrew/bin/fswatch",
+  "stabilityChecks": 4,
+  "stabilityIntervalMs": 1000,
+  "debounceMs": 800,
+  "unstableRetryDelayMs": 2000,
+  "rescanIntervalMs": 300000,
+  "maxAttemptsPerKey": 20,
+  "retryBaseDelayMs": 15000,
+  "retryMaxDelayMs": 300000,
+  "maxFindDepth": 3,
+  "removeQuarantine": true,
+  "openPolicy": "all",
+  "deletePolicy": "on_success",
+  "processPreexistingOnStartup": false,
+  "lockDir": "/tmp/com.adampeng.auto-installer.lock",
+  "logPath": "~/Library/Logs/auto-installer.log"
+}

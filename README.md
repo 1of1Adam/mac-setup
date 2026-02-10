@@ -47,3 +47,17 @@ dscl . -passwd /Users/$(whoami) "当前密码" ""
 - 移除登录密码后，Passkey 功能将不可用（Apple 强制要求密码）
 - sudo 免密码配置需要管理员权限
 - 建议在安全的环境下使用这些配置
+
+## 自动安装器（Downloads: .dmg / .iso*）
+
+用于监听 `~/Downloads`，自动挂载并安装新下载的 `.dmg` / `.iso*` 镜像中的应用：
+
+```bash
+bash ~/.dotfiles/auto-installer/install.sh
+```
+
+卸载：
+
+```bash
+bash ~/.dotfiles/auto-installer/uninstall.sh
+```

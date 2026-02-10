@@ -120,6 +120,7 @@ install_tools() {
         jq
         ripgrep     # 替代 grep
         fzf         # 模糊搜索
+        fswatch     # 监听 Downloads（AutoInstaller 依赖）
         eza         # 替代 ls
         bat         # 替代 cat
         fd          # 替代 find
